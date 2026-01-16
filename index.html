@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>誰是臥底 - Galaxy Edition</title>
+
+    <!-- Google Fonts: Cinzel (English Luxury) & Noto Sans TC (Clear Chinese) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Alpine.js -->
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js"></script>
+    
+    <!-- PapaParse -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
+    <!-- Tailwind Configuration -->
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        space: {
+                            900: '#0B0D17', /* Deep Space */
+                            800: '#15192B', /* Card Bg */
+                            700: '#1E243D',
+                            accent: '#D4AF37', /* Champagne Gold */
+                            accentGlow: '#FCD34D',
+                            danger: '#9F1239', /* Rose Red */
+                            text: '#E2E8F0',
+                            sub: '#94A3B8',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['"Noto Sans TC"', 'Helvetica Neue', 'Arial', 'sans-serif'],
+                        serif: ['"Noto Serif TC"', 'serif'],
+                        display: ['"Cinzel"', '"Noto Sans TC"', 'sans-serif'],
+                    },
+                    boxShadow: {
+                        'glass': '0 8px 32px 0 rgba(0, 0, 0, 0.37)',
+                        'glow': '0 0 15px rgba(212, 175, 55, 0.3)',
+                        'glow-strong': '0 0 25px rgba(212, 175, 55, 0.6)',
+                        'glow-red': '0 0 20px rgba(159, 18, 57, 0.5)',
+                    },
+                    backgroundImage: {
+                        'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
+                        'glass-gradient': 'linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.01) 100%)',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Game Logic -->
+    <script>
+        function spyGame() {
+            return {
+                phase: 'setup', 
+                isLoading: true,
+                csvUrl: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQwcUKab-tGkv9AJsczsiG85YZi1hlzNHFp1unv_t-2EEp4EHcjdnDGux67Fd1jncFIJJlEaC0wQDln/pub?output=csv',
+                
+                database: {},
+                categories: [
+                    { id: '單詞', name: '單詞', icon: '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14"/></svg>' },
+                    { id: '成語', name: '成語', icon: '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>' },
+                    { id: '動作', name: '動作', icon: '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>' },
+                    { id: '情境', name: '情境', icon: '<svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>' }
+                ],
+                
+                settings: {
+                    category: '單詞',
+                    playerCount: 6,
+                    spyCount: 2,
+                    whiteboard: false,
+                    whiteboardMode: 'A',
+                    spyRecognition: true,
+                    revealWords: false,
+                    customNames: false
+                },
+                
+                tempNames: [],
+                players: [],
+                gameWords: { civilian: '', spy: '' },
+                currentTurn: 0,
+                isHolding: false,
+                showAnswers: false,
+                winner: null,
+                modal: { show: false, target: null },
+                revealModal: { show: false, role: '', word: '' },
+
+                initData() {
+                    Papa.parse(this.csvUrl, {
+                        download: true,
+                        complete: (results) => {
+                            const data = results.data;
+                            const startIdx = (data[0][0] === 'Type' || data[0][0] === '類型') ? 1 : 0;
+                            data.slice(startIdx).forEach(row => {
+                                if(row.length >= 3 && row[0]) {
+                                    const type = row[0].trim();
+                                    if(!this.database[type]) this.database[type] = [];
+                                    this.database[type].push({ civ: row[1], spy: row[2] });
+                                }
+                            });
+                            this.isLoading = false;
+                            this.updateSpyDefaults();
+                            this.initTempNames();
+                        },
+                        error: () => alert("載入題庫失敗，請檢查網絡連線。")
+                    });
+                    this.$watch('settings.playerCount', () => {
+                        this.updateSpyDefaults();
+                        this.initTempNames();
+                    });
+                },
+
+                selectCategory(id) { this.settings.category = id; },
+
+                updateSpyDefaults() {
+                    const n = this.settings.playerCount;
+                    if (n <= 4) this.settings.spyCount = 1;
+                    else if (n <= 7) this.settings.spyCount = 2;
+                    else this.settings.spyCount = 3;
+                },
+
+                adjustSpy(delta) {
+                    const newCount = this.settings.spyCount + delta;
+                    if (newCount >= 1 && newCount <= this.maxSpies) {
+                        this.settings.spyCount = newCount;
+                    }
+                },
+
+                initTempNames() { this.tempNames = Array(12).fill(''); },
+
+                get maxSpies() { return Math.floor(this.settings.playerCount / 2) - 1; },
+
+                get roleCounts() {
+                    let spies = this.settings.spyCount;
+                    let wb = 0;
+                    let civ = this.settings.playerCount - spies;
+                    if (this.settings.whiteboard) {
+                        if (this.settings.whiteboardMode === 'A') {
+                            if (civ > 0) { civ--; wb++; }
+                        } else if (this.settings.whiteboardMode === 'B') {
+                            wb = spies; spies = 0;
+                        }
+                    }
+                    return { civilians: civ, spies: spies, whiteboards: wb };
+                },
+
+                get currentCategoryName() { return this.settings.category; },
+
+                startGame() {
+                    const pool = this.database[this.settings.category] || this.database['單詞'];
+                    if (!pool || pool.length === 0) { alert("該類別無題目"); return; }
+                    const pair = pool[Math.floor(Math.random() * pool.length)];
+                    this.gameWords = { civilian: pair.civ, spy: pair.spy };
+
+                    let roles = [];
+                    const counts = this.roleCounts;
+                    for(let i=0; i<counts.civilians; i++) roles.push('civilian');
+                    for(let i=0; i<counts.spies; i++) roles.push('spy');
+                    for(let i=0; i<counts.whiteboards; i++) roles.push('whiteboard');
+                    roles = roles.sort(() => Math.random() - 0.5);
+
+                    this.players = roles.map((role, idx) => {
+                        let word = (role === 'civilian') ? this.gameWords.civilian : (role === 'spy' ? this.gameWords.spy : '');
+                        let name = `玩家 ${idx + 1}`;
+                        if (this.settings.customNames && this.tempNames[idx].trim() !== '') {
+                            name = this.tempNames[idx].trim();
+                        }
+                        return { id: idx + 1, name: name, role: role, word: word, isDead: false };
+                    });
+
+                    this.currentTurn = 0;
+                    this.phase = 'pass';
+                    this.showAnswers = false;
+                    this.winner = null;
+                },
+
+                getRevealText() {
+                    if (!this.players || !this.players[this.currentTurn]) return '';
+                    const p = this.players[this.currentTurn];
+                    return p.role === 'whiteboard' ? "你是白板 (無詞)" : p.word;
+                },
+
+                shouldShowTeammates() {
+                    if (!this.players || !this.players[this.currentTurn]) return false;
+                    const p = this.players[this.currentTurn];
+                    return this.settings.spyRecognition && p.role === 'spy' && this.players.filter(x => x.role === 'spy').length > 1;
+                },
+
+                getTeammates() {
+                    if (!this.players || !this.players[this.currentTurn]) return '';
+                    const p = this.players[this.currentTurn];
+                    return this.players.filter(mate => mate.role === 'spy' && mate.id !== p.id).map(m => `No.${m.id}`).join(', ');
+                },
+
+                nextTurn() {
+                    if (this.currentTurn < this.players.length - 1) this.currentTurn++;
+                    else this.phase = 'play';
+                },
+
+                confirmEliminate(player) {
+                    this.modal.target = player;
+                    this.modal.show = true;
+                },
+
+                executeEliminate() {
+                    if (!this.modal.target) return;
+                    const p = this.players.find(x => x.id === this.modal.target.id);
+                    p.isDead = true;
+                    this.modal.show = false;
+                    this.revealModal.role = p.role;
+                    this.revealModal.word = p.role === 'whiteboard' ? '' : p.word;
+                    this.revealModal.show = true;
+                },
+
+                closeRevealModal() {
+                    this.revealModal.show = false;
+                    this.checkWinCondition();
+                },
+
+                getRoleName(role) {
+                    if (role === 'civilian') return '平民';
+                    if (role === 'spy') return '臥底';
+                    if (role === 'whiteboard') return '白板';
+                    return '';
+                },
+
+                checkWinCondition() {
+                    const alive = this.players.filter(p => !p.isDead);
+                    const civs = alive.filter(p => p.role === 'civilian').length;
+                    const spies = alive.filter(p => p.role === 'spy').length;
+                    const whiteboards = alive.filter(p => p.role === 'whiteboard').length;
+                    const badGuys = spies + whiteboards;
+
+                    if (badGuys === 0) { this.winner = 'civilian'; this.phase = 'gameover'; return; }
+                    if (badGuys >= civs || alive.length <= 2) { this.winner = 'spy'; this.phase = 'gameover'; return; }
+                },
+
+                resetGame() { this.phase = 'setup'; }
+            };
+        }
+    </script>
+
+    <style>
+        /* Base Reset & Fonts */
+        body {
+            background-color: #0B0D17;
+            color: #E2E8F0;
+            font-family: 'Noto Sans TC', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+            overscroll-behavior-y: none;
+        }
+        
+        h1, .display-font {
+            font-family: 'Cinzel', serif;
+        }
+        
+        h2, h3, h4 {
+            font-family: 'Noto Sans TC', sans-serif;
+        }
+
+        /* Custom Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(255,255,255,0.02); }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(212, 175, 55, 0.3); border-radius: 4px; }
+
+        /* Slider Customization */
+        input[type=range] {
+            -webkit-appearance: none;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: #D4AF37;
+            margin-top: -8px;
+            box-shadow: 0 0 10px rgba(212, 175, 55, 0.8);
+            border: 2px solid #fff;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 2px;
+        }
+
+        /* Glassmorphism Utilities */
+        .glass-card {
+            background: rgba(21, 25, 43, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+        }
+        
+        .glass-panel {
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.01) 100%);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        /* Star Animation */
+        #starfield {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        [x-cloak] { display: none !important; }
+        
+        /* Safe Area */
+        .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 24px); }
+    </style>
+</head>
+<body x-data="spyGame()" x-init="initData()" class="h-screen w-screen overflow-hidden flex flex-col relative text-space-text">
+
+    <!-- Canvas Starfield Background -->
+    <canvas id="starfield"></canvas>
+    <div class="fixed inset-0 z-0 bg-gradient-radial from-transparent via-space-900/50 to-space-900 pointer-events-none"></div>
+
+    <!-- Loading Screen -->
+    <div x-show="isLoading" class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-space-900/90 backdrop-blur-xl">
+        <div class="text-center">
+            <div class="relative w-16 h-16 mx-auto mb-6">
+                <div class="absolute inset-0 border-t-2 border-space-accent rounded-full animate-spin"></div>
+                <div class="absolute inset-2 border-t-2 border-white/30 rounded-full animate-spin" style="animation-direction: reverse; animation-duration: 2s;"></div>
+            </div>
+            <p class="text-space-accent tracking-[0.3em] text-xs font-display uppercase animate-pulse">INITIALIZING SYSTEM</p>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- PHASE 1: SETUP SCREEN -->
+    <!-- ========================================== -->
+    <div x-show="phase === 'setup' && !isLoading" x-transition.opacity.duration.500ms class="flex-1 flex flex-col h-full overflow-hidden relative z-10">
+        <!-- Header -->
+        <header class="px-6 pt-12 pb-6 text-center">
+            <h1 class="text-4xl font-display font-bold text-space-accent tracking-widest drop-shadow-lg">WHO IS THE SPY</h1>
+            <div class="h-px w-24 mx-auto bg-gradient-to-r from-transparent via-space-accent/50 to-transparent mt-4"></div>
+        </header>
+
+        <!-- Main Settings Scroll Area -->
+        <div class="flex-1 overflow-y-auto custom-scrollbar px-6 pb-32 space-y-6">
+            
+            <!-- 1. Player Configuration -->
+            <section class="glass-card rounded-2xl p-5 space-y-5 transition-all duration-300 hover:shadow-glow/20 hover:border-space-accent/30">
+                <!-- Header Row -->
+                <div class="flex flex-wrap justify-between items-center gap-2">
+                    <h2 class="text-sm font-sans font-bold text-white/90 tracking-wide flex items-center gap-2">
+                        <svg class="w-4 h-4 text-space-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                        玩家配置
+                    </h2>
+                    
+                    <div class="flex items-center gap-3 text-xs bg-black/40 rounded-full px-3 py-1.5 border border-white/5">
+                        <span class="text-space-sub">平 <b class="text-white font-sans text-sm" x-text="roleCounts.civilians"></b></span>
+                        <span class="w-px h-3 bg-white/20"></span>
+                        <span class="text-space-sub">臥 <b class="text-space-danger font-sans text-sm" x-text="roleCounts.spies"></b></span>
+                        <span x-show="settings.whiteboard" class="w-px h-3 bg-white/20"></span>
+                        <span x-show="settings.whiteboard" class="text-space-sub">白 <b class="text-space-accent font-sans text-sm" x-text="roleCounts.whiteboards"></b></span>
+                        
+                        <!-- Mini Adjuster -->
+                        <div class="flex items-center ml-2 border-l border-white/20 pl-2 gap-1">
+                            <button @click="adjustSpy(-1)" class="text-space-sub hover:text-white transition-colors disabled:opacity-30" :disabled="settings.spyCount <= 1">
+                                <svg class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 10a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd" /></svg>
+                            </button>
+                            <button @click="adjustSpy(1)" class="text-space-sub hover:text-white transition-colors disabled:opacity-30" :disabled="settings.spyCount >= maxSpies">
+                                <svg class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" /></svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Slider Row -->
+                <div class="flex items-center gap-6">
+                    <div class="flex-1 relative pt-2">
+                        <input type="range" min="4" max="12" step="1" x-model.number="settings.playerCount" class="w-full cursor-pointer">
+                        <div class="flex justify-between text-[10px] text-space-sub mt-2 font-display tracking-widest opacity-60">
+                            <span>04</span><span>12</span>
+                        </div>
+                    </div>
+                    <div class="w-14 h-14 rounded-2xl glass-panel flex flex-col items-center justify-center border border-space-accent/20 shadow-glow/10">
+                        <span class="text-2xl font-display text-space-accent" x-text="settings.playerCount"></span>
+                        <span class="text-[9px] text-space-sub uppercase tracking-wider font-display">PLAYERS</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 2. Custom Player Names -->
+            <section class="space-y-2">
+                 <button @click="settings.customNames = !settings.customNames" 
+                    class="w-full glass-card rounded-xl p-4 border border-white/5 flex justify-between items-center transition-all active:scale-[0.98] group">
+                    <span class="text-sm font-medium font-sans flex items-center gap-2 group-hover:text-space-accent transition-colors">
+                        <svg class="w-4 h-4 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                        自訂玩家名稱
+                    </span>
+                    <div class="w-11 h-6 rounded-full relative transition-colors duration-300 border border-white/10" :class="settings.customNames ? 'bg-space-accent/20 border-space-accent' : 'bg-black/40'">
+                        <div class="w-4 h-4 rounded-full absolute top-0.5 transition-transform duration-300 shadow-md" 
+                             :class="settings.customNames ? 'translate-x-6 bg-space-accent shadow-glow' : 'translate-x-1 bg-space-sub'"></div>
+                    </div>
+                </button>
+
+                <div x-show="settings.customNames" x-collapse>
+                    <div class="glass-card rounded-2xl p-4 mt-2 grid grid-cols-2 gap-3 border-t-0">
+                        <template x-for="i in settings.playerCount">
+                            <div class="relative group">
+                                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] text-space-sub font-display opacity-50" x-text="'P'+i"></span>
+                                <input type="text" x-model="tempNames[i-1]" :placeholder="'玩家 ' + i" 
+                                    class="w-full bg-black/30 border border-white/10 rounded-lg pl-8 pr-3 py-2.5 text-xs text-white placeholder-white/20 focus:border-space-accent/50 focus:bg-black/50 focus:outline-none transition-all text-center font-sans">
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 3. Category Selection -->
+            <section>
+                <h2 class="text-xs text-space-sub mb-3 uppercase tracking-[0.15em] pl-1 font-display">SELECT DATA SOURCE</h2>
+                <div class="grid grid-cols-2 gap-3">
+                    <template x-for="cat in categories" :key="cat.id">
+                        <button 
+                            @click="selectCategory(cat.id)"
+                            :class="settings.category === cat.id ? 'border-space-accent bg-space-accent/10 shadow-glow text-space-accent' : 'border-white/10 bg-black/20 text-space-sub hover:bg-white/5'"
+                            class="py-5 border rounded-xl transition-all duration-300 flex flex-col items-center justify-center gap-3 relative overflow-hidden group backdrop-blur-sm">
+                            <div class="transition-transform duration-300 group-hover:scale-110" x-html="cat.icon" style="width: 24px; height: 24px;"></div>
+                            <span class="text-sm font-sans font-bold tracking-widest" x-text="cat.name"></span>
+                            
+                            <!-- Active Indicator Line -->
+                            <div x-show="settings.category === cat.id" class="absolute bottom-0 left-0 w-full h-0.5 bg-space-accent shadow-[0_0_10px_#D4AF37]"></div>
+                        </button>
+                    </template>
+                </div>
+            </section>
+
+            <!-- 4. Advanced Settings -->
+            <section class="space-y-3">
+                <h2 class="text-xs text-space-sub uppercase tracking-[0.15em] pl-1 font-display mt-6">ADVANCED SETTINGS</h2>
+                
+                <div class="grid grid-cols-2 gap-3">
+                    <!-- Whiteboard Toggle -->
+                    <button @click="settings.whiteboard = !settings.whiteboard" 
+                        class="glass-card rounded-xl p-4 border border-white/5 flex flex-col justify-between text-left transition-all h-24 hover:border-white/20"
+                        :class="settings.whiteboard ? 'border-space-accent/50 bg-space-accent/5 shadow-glow/10' : ''">
+                        <div class="flex justify-between items-start w-full mb-2">
+                            <div class="p-1.5 rounded bg-white/5">
+                                <svg class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                            </div>
+                            <div class="w-3 h-3 rounded-full transition-all duration-500" :class="settings.whiteboard ? 'bg-space-accent shadow-[0_0_10px_#D4AF37]' : 'bg-space-sub/30'"></div>
+                        </div>
+                        <div>
+                            <span class="text-sm font-medium font-sans block" :class="settings.whiteboard ? 'text-space-accent' : 'text-space-text'">加入白板</span>
+                            <span class="text-[10px] opacity-50 block mt-0.5 font-sans">特殊角色混淆視聽</span>
+                        </div>
+                    </button>
+
+                    <!-- Spy Recognition Toggle -->
+                    <button @click="settings.spyRecognition = !settings.spyRecognition" 
+                        class="glass-card rounded-xl p-4 border border-white/5 flex flex-col justify-between text-left transition-all h-24 hover:border-white/20"
+                        :class="settings.spyRecognition ? 'border-space-accent/50 bg-space-accent/5 shadow-glow/10' : ''">
+                        <div class="flex justify-between items-start w-full mb-2">
+                            <div class="p-1.5 rounded bg-white/5">
+                                <svg class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                            </div>
+                            <div class="w-3 h-3 rounded-full transition-all duration-500" :class="settings.spyRecognition ? 'bg-space-accent shadow-[0_0_10px_#D4AF37]' : 'bg-space-sub/30'"></div>
+                        </div>
+                        <div>
+                            <span class="text-sm font-medium font-sans block" :class="settings.spyRecognition ? 'text-space-accent' : 'text-space-text'">臥底互認</span>
+                            <span class="text-[10px] opacity-50 block mt-0.5 font-sans">臥底可看見同伴</span>
+                        </div>
+                    </button>
+                </div>
+
+                <!-- Whiteboard Modes -->
+                <div x-show="settings.whiteboard" x-collapse class="glass-panel rounded-xl p-1">
+                    <div class="flex gap-1">
+                        <button @click="settings.whiteboardMode = 'A'" 
+                            class="flex-1 py-3 rounded-lg text-xs transition-all relative overflow-hidden"
+                            :class="settings.whiteboardMode === 'A' ? 'bg-white/10 text-white' : 'text-space-sub hover:bg-white/5'">
+                            <span class="block font-bold font-sans mb-0.5">模式 A (標準)</span>
+                            <span class="opacity-60 scale-90 block font-sans">平民替換</span>
+                            <div x-show="settings.whiteboardMode === 'A'" class="absolute bottom-0 left-1/2 -translate-x-1/2 w-1/2 h-0.5 bg-space-accent shadow-[0_0_5px_#D4AF37]"></div>
+                        </button>
+                        <button @click="settings.whiteboardMode = 'B'" 
+                            class="flex-1 py-3 rounded-lg text-xs transition-all relative overflow-hidden"
+                            :class="settings.whiteboardMode === 'B' ? 'bg-white/10 text-white' : 'text-space-sub hover:bg-white/5'">
+                            <span class="block font-bold font-sans mb-0.5">模式 B (挑戰)</span>
+                            <span class="opacity-60 scale-90 block font-sans">臥底無詞</span>
+                            <div x-show="settings.whiteboardMode === 'B'" class="absolute bottom-0 left-1/2 -translate-x-1/2 w-1/2 h-0.5 bg-space-accent shadow-[0_0_5px_#D4AF37]"></div>
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Start Button -->
+        <div class="absolute bottom-0 left-0 w-full p-6 pb-10 bg-gradient-to-t from-space-900 via-space-900/90 to-transparent z-20">
+            <button @click="startGame()" class="relative w-full group overflow-hidden rounded-2xl">
+                <div class="absolute inset-0 bg-space-accent transition-transform duration-300 group-hover:scale-105"></div>
+                <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent translate-x-[-100%] group-hover:animate-shine"></div>
+                <div class="relative py-4 flex items-center justify-center gap-3">
+                    <span class="text-space-900 font-display font-bold tracking-[0.2em] text-lg">開始遊戲</span>
+                    <svg class="w-5 h-5 text-space-900 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+                </div>
+            </button>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- PHASE 2: PASS & PLAY -->
+    <!-- ========================================== -->
+    <div x-show="phase === 'pass'" x-cloak class="fixed inset-0 z-40 flex flex-col items-center justify-center p-6 text-center select-none backdrop-blur-3xl bg-black/60">
+        
+        <!-- Animated Ring -->
+        <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div class="w-72 h-72 border border-space-accent/20 rounded-full animate-[spin_10s_linear_infinite]"></div>
+            <div class="w-[300px] h-[300px] border border-space-accent/10 rounded-full absolute animate-[spin_15s_linear_infinite_reverse]"></div>
+            <div class="w-[200px] h-[200px] rounded-full absolute bg-space-accent/5 blur-3xl animate-pulse"></div>
+        </div>
+
+        <div class="relative z-10 w-full max-w-sm">
+            <div class="mb-14 space-y-2">
+                <p class="text-space-accent text-xs font-display tracking-[0.4em] opacity-80">IDENTITY CHECK</p>
+                <h2 class="text-2xl font-light text-white font-sans">
+                    請傳遞給<br>
+                    <span class="text-white font-bold mt-3 block text-5xl drop-shadow-[0_0_15px_rgba(255,255,255,0.3)]" x-text="players[currentTurn]?.name"></span>
+                </h2>
+            </div>
+
+            <!-- Hold Button -->
+            <div 
+                @touchstart.prevent="isHolding = true" 
+                @touchend.prevent="isHolding = false"
+                @mousedown="isHolding = true" 
+                @mouseup="isHolding = false"
+                @mouseleave="isHolding = false"
+                :class="isHolding ? 'scale-100 border-space-accent bg-black/80 shadow-glow-strong' : 'scale-95 border-white/20 bg-white/5 hover:border-space-accent/50'"
+                class="w-64 h-64 mx-auto rounded-full border-2 flex flex-col items-center justify-center transition-all duration-300 relative overflow-hidden cursor-pointer backdrop-blur-md group">
+                
+                <!-- Hidden State -->
+                <div x-show="!isHolding" class="flex flex-col items-center transition-all duration-300 group-hover:scale-110">
+                    <div class="p-4 rounded-full bg-space-accent/10 mb-4 animate-pulse">
+                        <svg class="w-12 h-12 text-space-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                    </div>
+                    <p class="text-space-sub font-display tracking-widest text-sm">按住顯示</p>
+                </div>
+
+                <!-- Revealed State -->
+                <div x-show="isHolding" class="absolute inset-0 flex flex-col items-center justify-center p-6 z-20 bg-black/90">
+                    <p class="text-space-accent text-[10px] uppercase tracking-widest mb-4 border-b border-space-accent/30 pb-1">Secret Identity</p>
+                    
+                    <h3 class="text-4xl font-bold text-white mb-6 leading-tight break-words font-sans drop-shadow-md" 
+                        :class="players[currentTurn]?.role === 'whiteboard' ? 'text-space-sub italic' : ''"
+                        x-text="getRevealText()">
+                    </h3>
+
+                    <div x-show="shouldShowTeammates()" class="bg-space-danger/20 border border-space-danger/40 rounded px-4 py-2 mt-2">
+                        <p class="text-space-danger text-xs font-bold mb-1">同伴</p>
+                        <p class="text-white text-sm" x-text="getTeammates()"></p>
+                    </div>
+                </div>
+            </div>
+
+            <button @click="nextTurn()" class="mt-16 w-full py-4 rounded-xl border border-white/10 bg-white/5 text-space-text font-display tracking-widest hover:bg-space-accent hover:text-black hover:border-space-accent transition-all duration-300">
+                <span x-text="currentTurn < players.length - 1 ? 'NEXT PLAYER' : 'START GAME'"></span>
+            </button>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- PHASE 3: MAIN GAME BOARD -->
+    <!-- ========================================== -->
+    <div x-show="phase === 'play'" x-cloak class="flex flex-col h-full relative z-10">
+        <!-- Game Header -->
+        <div class="px-6 py-4 flex justify-between items-center glass-panel z-20 border-b-0 border-white/5 sticky top-0">
+            <div>
+                <h2 class="text-space-accent font-display font-bold text-xl tracking-wide">THE GAME</h2>
+                <div class="flex gap-2 text-[10px] text-space-sub mt-1 uppercase tracking-wider font-display">
+                    <span x-show="settings.revealWords" x-text="'TOPIC: ' + currentCategoryName"></span>
+                    <span x-show="!settings.revealWords">TOPIC HIDDEN</span>
+                </div>
+            </div>
+            
+            <button @click="showAnswers = !showAnswers" class="w-10 h-10 rounded-full glass-card flex items-center justify-center text-space-accent hover:bg-space-accent hover:text-black transition-all">
+                <svg x-show="!showAnswers" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                <svg x-show="showAnswers" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
+            </button>
+        </div>
+
+        <!-- Answers Reveal Bar -->
+        <div x-show="showAnswers" x-transition.origin.top class="bg-black/80 backdrop-blur-xl px-6 py-4 border-b border-space-danger/30 relative z-10">
+            <div class="flex justify-between text-xs font-sans">
+                <div>
+                    <span class="text-space-sub block mb-1 uppercase tracking-widest text-[10px]">平民</span>
+                    <span class="text-white font-bold text-lg" x-text="gameWords.civilian"></span>
+                </div>
+                <div class="text-right">
+                    <span class="text-space-sub block mb-1 uppercase tracking-widest text-[10px]">臥底</span>
+                    <span class="text-space-danger font-bold text-lg" x-text="gameWords.spy"></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Player Grid -->
+        <div class="flex-1 overflow-y-auto custom-scrollbar p-6 pb-24">
+            <div class="grid grid-cols-2 gap-4">
+                <template x-for="p in players" :key="p.id">
+                    <button 
+                        @click="confirmEliminate(p)"
+                        :disabled="p.isDead"
+                        :class="p.isDead ? 'opacity-40 grayscale border-transparent bg-black/20' : 'border-white/10 bg-space-800/40 hover:bg-space-800/60 hover:border-space-accent/30 shadow-glass'"
+                        class="aspect-[4/3] rounded-2xl border relative flex flex-col items-center justify-center p-4 transition-all duration-300 group overflow-hidden backdrop-blur-sm">
+                        
+                        <!-- Number Badge -->
+                        <div class="absolute top-2 left-3 text-[10px] font-display font-bold text-space-sub opacity-50" x-text="'NO.' + p.id"></div>
+
+                        <!-- Status Icon -->
+                        <div class="mb-2 transition-transform duration-500 relative" :class="p.isDead ? 'scale-75' : 'group-hover:scale-110 group-hover:-translate-y-1'">
+                            <div class="absolute inset-0 bg-space-accent/20 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                            <svg x-show="!p.isDead" class="w-8 h-8 text-space-accent relative z-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                            </svg>
+                            <svg x-show="p.isDead" class="w-8 h-8 text-space-danger relative z-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </div>
+
+                        <!-- Name -->
+                        <div class="text-sm font-medium text-center truncate w-full px-2 font-sans tracking-wide" 
+                            :class="p.isDead ? 'line-through text-space-sub' : 'text-white'"
+                            x-text="p.name"></div>
+
+                        <!-- Role Reveal (If Dead) -->
+                        <div x-show="p.isDead" class="mt-2 text-[10px] font-bold uppercase tracking-widest border px-2 py-0.5 rounded border-white/10" 
+                             :class="{
+                                'text-white bg-white/5': p.role === 'civilian', 
+                                'text-space-danger bg-space-danger/10 border-space-danger/30': p.role === 'spy',
+                                'text-space-accent bg-space-accent/10 border-space-accent/30': p.role === 'whiteboard'
+                             }"
+                             x-text="getRoleName(p.role)">
+                        </div>
+                    </button>
+                </template>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- MODALS -->
+    <!-- ========================================== -->
+
+    <!-- Elimination Modal -->
+    <div x-show="modal.show" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/80 backdrop-blur-sm" x-transition.opacity>
+        <div class="glass-card rounded-2xl w-full max-w-xs p-6 shadow-2xl transform transition-all border-space-danger/30" @click.away="modal.show = false">
+            <h3 class="text-lg text-center text-white/80 mb-2 font-sans">確認淘汰?</h3>
+            <p class="text-center text-white font-bold text-3xl mb-8 font-sans drop-shadow-md" x-text="modal.target?.name"></p>
+            
+            <div class="grid grid-cols-2 gap-4">
+                <button @click="modal.show = false" class="py-3 rounded-xl border border-white/10 text-space-sub hover:bg-white/5 transition-colors">取消</button>
+                <button @click="executeEliminate()" class="py-3 rounded-xl bg-gradient-to-r from-space-danger to-red-600 text-white font-medium shadow-glow-red hover:scale-[1.02] transition-transform">淘汰</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Identity Reveal Modal (After Elimination) -->
+    <div x-show="revealModal.show" x-cloak class="fixed inset-0 z-[60] flex items-center justify-center p-6 bg-black/95 backdrop-blur-xl" x-transition:enter="transition ease-out duration-500" x-transition:enter-start="opacity-0 scale-90" x-transition:enter-end="opacity-100 scale-100">
+        <div class="text-center w-full relative">
+            <!-- Background Glow -->
+            <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-space-accent/10 rounded-full blur-3xl animate-pulse"></div>
+            
+            <p class="text-space-sub text-xs mb-6 tracking-[0.3em] uppercase font-display relative z-10">IDENTITY REVEALED</p>
+            
+            <!-- Dynamic Role Icon/Text -->
+            <div class="mb-10 relative z-10">
+                <div class="w-28 h-28 mx-auto rounded-full flex items-center justify-center mb-6 border-2 shadow-glass"
+                    :class="{
+                        'bg-space-800 border-white/20 text-white': revealModal.role === 'civilian',
+                        'bg-space-danger/20 border-space-danger text-space-danger shadow-glow-red': revealModal.role === 'spy',
+                        'bg-white/10 border-space-accent text-space-accent shadow-glow': revealModal.role === 'whiteboard'
+                    }">
+                    <svg x-show="revealModal.role === 'civilian'" class="w-14 h-14" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    <svg x-show="revealModal.role === 'spy'" class="w-14 h-14" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
+                    <svg x-show="revealModal.role === 'whiteboard'" class="w-14 h-14" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                </div>
+                <h2 class="text-5xl font-bold mb-2 text-white font-sans drop-shadow-lg" x-text="getRoleName(revealModal.role)"></h2>
+            </div>
+
+            <button @click="closeRevealModal()" class="w-full max-w-xs py-4 rounded-xl border border-white/20 text-white hover:bg-white/10 transition-colors font-display tracking-widest relative z-10">
+                繼續遊戲
+            </button>
+        </div>
+    </div>
+
+    <!-- Game Over Screen -->
+    <div x-show="phase === 'gameover'" x-cloak class="fixed inset-0 z-[70] bg-[#050505] flex flex-col items-center justify-center p-6 text-center">
+        <!-- Victory Particles (Simplified) -->
+        <div class="absolute inset-0 overflow-hidden pointer-events-none">
+            <div class="absolute top-1/4 left-1/4 w-32 h-32 bg-space-accent/20 rounded-full blur-[80px]"></div>
+            <div class="absolute bottom-1/4 right-1/4 w-40 h-40 bg-purple-500/20 rounded-full blur-[80px]"></div>
+        </div>
+
+        <div class="mb-12 relative z-10">
+            <p class="text-space-sub tracking-[0.5em] mb-4 text-xs font-display">遊戲結束</p>
+            <h1 class="text-6xl font-sans font-bold text-transparent bg-clip-text bg-gradient-to-b from-space-accent to-yellow-700 mb-6 drop-shadow-sm" 
+                x-text="winner === 'civilian' ? '平民獲勝' : '臥底獲勝'"></h1>
+        </div>
+
+        <div class="glass-card rounded-2xl p-8 w-full max-w-sm mb-10 border border-white/10 relative z-10">
+            <div class="mb-6 pb-6 border-b border-white/5">
+                <span class="text-[10px] text-space-sub uppercase tracking-widest block mb-2">平民詞</span>
+                <p class="text-3xl text-white font-sans font-bold" x-text="gameWords.civilian"></p>
+            </div>
+            <div>
+                <span class="text-[10px] text-space-sub uppercase tracking-widest block mb-2">臥底詞</span>
+                <p class="text-3xl text-space-danger font-sans font-bold" x-text="gameWords.spy"></p>
+            </div>
+        </div>
+
+        <button @click="resetGame()" class="w-full max-w-xs bg-space-accent text-black font-bold py-4 rounded-xl shadow-glow hover:scale-105 transition-transform font-display tracking-widest relative z-10">
+            再玩一次
+        </button>
+    </div>
+
+    <style>
+        /* Shine Animation for Button */
+        @keyframes shine {
+            100% { transform: translateX(100%); }
+        }
+        .animate-shine {
+            animation: shine 2s infinite;
+        }
+    </style>
+
+    <!-- Starfield Logic -->
+    <script>
+        const canvas = document.getElementById('starfield');
+        const ctx = canvas.getContext('2d');
+        let width, height;
+        let stars = [];
+
+        function initStars() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            stars = [];
+            const starCount = Math.floor((width * height) / 4000); // Dense but performant
+            for (let i = 0; i < starCount; i++) {
+                stars.push({
+                    x: Math.random() * width,
+                    y: Math.random() * height,
+                    radius: Math.random() * 1.5,
+                    alpha: Math.random(),
+                    speed: Math.random() * 0.05,
+                    twinkleSpeed: Math.random() * 0.02 + 0.005,
+                    twinkleDir: 1
+                });
+            }
+        }
+
+        function animateStars() {
+            ctx.clearRect(0, 0, width, height);
+            ctx.fillStyle = 'white';
+            
+            stars.forEach(star => {
+                // Twinkle
+                star.alpha += star.twinkleSpeed * star.twinkleDir;
+                if (star.alpha > 1) { star.alpha = 1; star.twinkleDir = -1; }
+                if (star.alpha < 0.2) { star.alpha = 0.2; star.twinkleDir = 1; }
+
+                // Move slowly
+                star.y -= star.speed;
+                if (star.y < 0) star.y = height;
+
+                ctx.globalAlpha = star.alpha;
+                ctx.beginPath();
+                ctx.arc(star.x, star.y, star.radius, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            requestAnimationFrame(animateStars);
+        }
+
+        window.addEventListener('resize', initStars);
+        initStars();
+        animateStars();
+    </script>
+</body>
+</html>
