@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Spyfall-Game</title>
+    <title>誰是臥底 - Galaxy Edition</title>
 
     <!-- Google Fonts: Cinzel (English Luxury) & Noto Sans TC (Clear Chinese) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -85,6 +85,7 @@
                 },
                 
                 tempNames: [],
+                saveMessage: '', // State for save feedback
                 players: [],
                 gameWords: { civilian: '', spy: '' },
                 currentTurn: 0,
@@ -95,6 +96,22 @@
                 revealModal: { show: false, role: '', word: '' },
 
                 initData() {
+                    // Try to load names from localStorage first
+                    const savedNames = localStorage.getItem('spyGame_names');
+                    if (savedNames) {
+                        try {
+                            this.tempNames = JSON.parse(savedNames);
+                            // Ensure array length matches max possible players (12)
+                            if (this.tempNames.length < 12) {
+                                this.tempNames = [...this.tempNames, ...Array(12 - this.tempNames.length).fill('')];
+                            }
+                        } catch (e) {
+                            this.initTempNames();
+                        }
+                    } else {
+                        this.initTempNames();
+                    }
+
                     Papa.parse(this.csvUrl, {
                         download: true,
                         complete: (results) => {
@@ -109,13 +126,11 @@
                             });
                             this.isLoading = false;
                             this.updateSpyDefaults();
-                            this.initTempNames();
                         },
                         error: () => alert("載入題庫失敗，請檢查網絡連線。")
                     });
                     this.$watch('settings.playerCount', () => {
                         this.updateSpyDefaults();
-                        this.initTempNames();
                     });
                 },
 
@@ -136,6 +151,21 @@
                 },
 
                 initTempNames() { this.tempNames = Array(12).fill(''); },
+
+                // New function: Save names to localStorage
+                saveNames() {
+                    localStorage.setItem('spyGame_names', JSON.stringify(this.tempNames));
+                    this.saveMessage = 'SAVED';
+                    setTimeout(() => { this.saveMessage = ''; }, 2000);
+                },
+
+                // New function: Reset names
+                resetNames() {
+                    this.initTempNames();
+                    localStorage.removeItem('spyGame_names');
+                    this.saveMessage = 'RESET';
+                    setTimeout(() => { this.saveMessage = ''; }, 2000);
+                },
 
                 get maxSpies() { return Math.floor(this.settings.playerCount / 2) - 1; },
 
@@ -349,7 +379,7 @@
     <div x-show="phase === 'setup' && !isLoading" x-transition.opacity.duration.500ms class="flex-1 flex flex-col h-full overflow-hidden relative z-10">
         <!-- Header -->
         <header class="px-6 pt-12 pb-6 text-center">
-            <h1 class="text-4xl font-display font-bold text-space-accent tracking-widest drop-shadow-lg">WHO IS THE SPY</h1>
+            <h1 class="text-4xl font-display font-bold text-space-accent tracking-widest drop-shadow-lg whitespace-nowrap">SPYFALL</h1>
             <div class="h-px w-24 mx-auto bg-gradient-to-r from-transparent via-space-accent/50 to-transparent mt-4"></div>
         </header>
 
@@ -414,14 +444,32 @@
                 </button>
 
                 <div x-show="settings.customNames" x-collapse>
-                    <div class="glass-card rounded-2xl p-4 mt-2 grid grid-cols-2 gap-3 border-t-0">
-                        <template x-for="i in settings.playerCount">
-                            <div class="relative group">
-                                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] text-space-sub font-display opacity-50" x-text="'P'+i"></span>
-                                <input type="text" x-model="tempNames[i-1]" :placeholder="'玩家 ' + i" 
-                                    class="w-full bg-black/30 border border-white/10 rounded-lg pl-8 pr-3 py-2.5 text-xs text-white placeholder-white/20 focus:border-space-accent/50 focus:bg-black/50 focus:outline-none transition-all text-center font-sans">
+                    <div class="glass-card rounded-2xl p-4 mt-2 border-t-0">
+                        <!-- Input Grid -->
+                        <div class="grid grid-cols-2 gap-3 mb-4">
+                            <template x-for="i in settings.playerCount">
+                                <div class="relative group">
+                                    <span class="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] text-space-sub font-display opacity-50" x-text="'P'+i"></span>
+                                    <input type="text" x-model="tempNames[i-1]" :placeholder="'Player ' + i" 
+                                        class="w-full bg-black/30 border border-white/10 rounded-lg pl-8 pr-3 py-2.5 text-xs text-white placeholder-white/20 focus:border-space-accent/50 focus:bg-black/50 focus:outline-none transition-all text-center font-sans">
+                                </div>
+                            </template>
+                        </div>
+                        
+                        <!-- Save & Reset Buttons -->
+                        <div class="flex items-center justify-between gap-3 pt-3 border-t border-white/5">
+                            <div class="text-xs text-space-accent h-4 font-display tracking-widest" x-text="saveMessage" x-transition.opacity></div>
+                            <div class="flex gap-3">
+                                <button @click="resetNames()" class="px-4 py-2 rounded-lg text-[10px] border border-white/10 text-space-sub hover:bg-white/5 hover:text-white transition-colors flex items-center gap-1.5 font-display tracking-wider">
+                                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                    RESET
+                                </button>
+                                <button @click="saveNames()" class="px-4 py-2 rounded-lg text-[10px] bg-space-accent/20 border border-space-accent/50 text-space-accent hover:bg-space-accent hover:text-black transition-all flex items-center gap-1.5 shadow-glow/20 font-display tracking-wider">
+                                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" /></svg>
+                                    SAVE
+                                </button>
                             </div>
-                        </template>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -562,7 +610,7 @@
 
                 <!-- Revealed State -->
                 <div x-show="isHolding" class="absolute inset-0 flex flex-col items-center justify-center p-6 z-20 bg-black/90">
-                    <p class="text-space-accent text-[10px] uppercase tracking-widest mb-4 border-b border-space-accent/30 pb-1">Secret Identity</p>
+                    <p class="text-space-accent text-[10px] uppercase tracking-widest mb-4 border-b border-space-accent/30 pb-1">您的身份</p>
                     
                     <h3 class="text-4xl font-bold text-white mb-6 leading-tight break-words font-sans drop-shadow-md" 
                         :class="players[currentTurn]?.role === 'whiteboard' ? 'text-space-sub italic' : ''"
@@ -577,7 +625,7 @@
             </div>
 
             <button @click="nextTurn()" class="mt-16 w-full py-4 rounded-xl border border-white/10 bg-white/5 text-space-text font-display tracking-widest hover:bg-space-accent hover:text-black hover:border-space-accent transition-all duration-300">
-                <span x-text="currentTurn < players.length - 1 ? 'NEXT PLAYER' : 'START GAME'"></span>
+                <span x-text="currentTurn < players.length - 1 ? '下一位' : '開始遊戲'"></span>
             </button>
         </div>
     </div>
@@ -701,7 +749,7 @@
             </div>
 
             <button @click="closeRevealModal()" class="w-full max-w-xs py-4 rounded-xl border border-white/20 text-white hover:bg-white/10 transition-colors font-display tracking-widest relative z-10">
-                繼續遊戲
+                CONTINUE
             </button>
         </div>
     </div>
@@ -715,7 +763,7 @@
         </div>
 
         <div class="mb-12 relative z-10">
-            <p class="text-space-sub tracking-[0.5em] mb-4 text-xs font-display">遊戲結束</p>
+            <p class="text-space-sub tracking-[0.5em] mb-4 text-xs font-display">GAME FINISHED</p>
             <h1 class="text-6xl font-sans font-bold text-transparent bg-clip-text bg-gradient-to-b from-space-accent to-yellow-700 mb-6 drop-shadow-sm" 
                 x-text="winner === 'civilian' ? '平民獲勝' : '臥底獲勝'"></h1>
         </div>
@@ -732,7 +780,7 @@
         </div>
 
         <button @click="resetGame()" class="w-full max-w-xs bg-space-accent text-black font-bold py-4 rounded-xl shadow-glow hover:scale-105 transition-transform font-display tracking-widest relative z-10">
-            再玩一次
+            PLAY AGAIN
         </button>
     </div>
 
