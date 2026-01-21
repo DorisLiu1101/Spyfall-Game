@@ -5,21 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>誰是臥底 - Galaxy Edition</title>
 
-    <!-- Google Fonts: Cinzel (English Luxury) & Noto Sans TC (Clear Chinese) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
 
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Alpine.js -->
     <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js"></script>
     
-    <!-- PapaParse -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 
-    <!-- Tailwind Configuration -->
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -57,7 +52,6 @@
         }
     </script>
 
-    <!-- Game Logic -->
     <script>
         function spyGame() {
             return {
@@ -89,7 +83,7 @@
                 players: [],
                 gameWords: { civilian: '', spy: '' },
                 currentTurn: 0,
-                isHolding: false,
+                isRevealed: false, // New state for click-to-toggle
                 showAnswers: false,
                 winner: null,
                 modal: { show: false, target: null },
@@ -208,6 +202,7 @@
                     });
 
                     this.currentTurn = 0;
+                    this.isRevealed = false; // Reset reveal state
                     this.phase = 'pass';
                     this.showAnswers = false;
                     this.winner = null;
@@ -216,7 +211,20 @@
                 getRevealText() {
                     if (!this.players || !this.players[this.currentTurn]) return '';
                     const p = this.players[this.currentTurn];
-                    return p.role === 'whiteboard' ? "你是白板 (無詞)" : p.word;
+                    // Simplified: Just return the word or "白板"
+                    return p.role === 'whiteboard' ? "白板" : p.word;
+                },
+                
+                // Toggle Logic for "Click to Reveal / Click to Hide & Pass"
+                toggleReveal() {
+                    if (!this.isRevealed) {
+                        // If hidden, show it
+                        this.isRevealed = true;
+                    } else {
+                        // If shown, hide it AND pass to next turn immediately
+                        this.isRevealed = false;
+                        this.nextTurn();
+                    }
                 },
 
                 shouldShowTeammates() {
@@ -232,8 +240,11 @@
                 },
 
                 nextTurn() {
-                    if (this.currentTurn < this.players.length - 1) this.currentTurn++;
-                    else this.phase = 'play';
+                    if (this.currentTurn < this.players.length - 1) {
+                        this.currentTurn++;
+                    } else {
+                        this.phase = 'play';
+                    }
                 },
 
                 confirmEliminate(player) {
@@ -358,11 +369,9 @@
 </head>
 <body x-data="spyGame()" x-init="initData()" class="h-screen w-screen overflow-hidden flex flex-col relative text-space-text">
 
-    <!-- Canvas Starfield Background -->
     <canvas id="starfield"></canvas>
     <div class="fixed inset-0 z-0 bg-gradient-radial from-transparent via-space-900/50 to-space-900 pointer-events-none"></div>
 
-    <!-- Loading Screen -->
     <div x-show="isLoading" class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-space-900/90 backdrop-blur-xl">
         <div class="text-center">
             <div class="relative w-16 h-16 mx-auto mb-6">
@@ -373,22 +382,15 @@
         </div>
     </div>
 
-    <!-- ========================================== -->
-    <!-- PHASE 1: SETUP SCREEN -->
-    <!-- ========================================== -->
     <div x-show="phase === 'setup' && !isLoading" x-transition.opacity.duration.500ms class="flex-1 flex flex-col h-full overflow-hidden relative z-10">
-        <!-- Header -->
         <header class="px-6 pt-12 pb-6 text-center">
             <h1 class="text-4xl font-display font-bold text-space-accent tracking-widest drop-shadow-lg whitespace-nowrap">SPYFALL</h1>
             <div class="h-px w-24 mx-auto bg-gradient-to-r from-transparent via-space-accent/50 to-transparent mt-4"></div>
         </header>
 
-        <!-- Main Settings Scroll Area -->
         <div class="flex-1 overflow-y-auto custom-scrollbar px-6 pb-32 space-y-6">
             
-            <!-- 1. Player Configuration -->
             <section class="glass-card rounded-2xl p-5 space-y-5 transition-all duration-300 hover:shadow-glow/20 hover:border-space-accent/30">
-                <!-- Header Row -->
                 <div class="flex flex-wrap justify-between items-center gap-2">
                     <h2 class="text-sm font-sans font-bold text-white/90 tracking-wide flex items-center gap-2">
                         <svg class="w-4 h-4 text-space-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
@@ -402,7 +404,6 @@
                         <span x-show="settings.whiteboard" class="w-px h-3 bg-white/20"></span>
                         <span x-show="settings.whiteboard" class="text-space-sub">白 <b class="text-space-accent font-sans text-sm" x-text="roleCounts.whiteboards"></b></span>
                         
-                        <!-- Mini Adjuster -->
                         <div class="flex items-center ml-2 border-l border-white/20 pl-2 gap-1">
                             <button @click="adjustSpy(-1)" class="text-space-sub hover:text-white transition-colors disabled:opacity-30" :disabled="settings.spyCount <= 1">
                                 <svg class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 10a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd" /></svg>
@@ -414,7 +415,6 @@
                     </div>
                 </div>
 
-                <!-- Slider Row -->
                 <div class="flex items-center gap-6">
                     <div class="flex-1 relative pt-2">
                         <input type="range" min="4" max="12" step="1" x-model.number="settings.playerCount" class="w-full cursor-pointer">
@@ -429,7 +429,6 @@
                 </div>
             </section>
 
-            <!-- 2. Custom Player Names -->
             <section class="space-y-2">
                  <button @click="settings.customNames = !settings.customNames" 
                     class="w-full glass-card rounded-xl p-4 border border-white/5 flex justify-between items-center transition-all active:scale-[0.98] group">
@@ -445,7 +444,6 @@
 
                 <div x-show="settings.customNames" x-collapse>
                     <div class="glass-card rounded-2xl p-4 mt-2 border-t-0">
-                        <!-- Input Grid -->
                         <div class="grid grid-cols-2 gap-3 mb-4">
                             <template x-for="i in settings.playerCount">
                                 <div class="relative group">
@@ -456,7 +454,6 @@
                             </template>
                         </div>
                         
-                        <!-- Save & Reset Buttons -->
                         <div class="flex items-center justify-between gap-3 pt-3 border-t border-white/5">
                             <div class="text-xs text-space-accent h-4 font-display tracking-widest" x-text="saveMessage" x-transition.opacity></div>
                             <div class="flex gap-3">
@@ -474,7 +471,6 @@
                 </div>
             </section>
 
-            <!-- 3. Category Selection -->
             <section>
                 <h2 class="text-xs text-space-sub mb-3 uppercase tracking-[0.15em] pl-1 font-display">SELECT DATA SOURCE</h2>
                 <div class="grid grid-cols-2 gap-3">
@@ -486,19 +482,16 @@
                             <div class="transition-transform duration-300 group-hover:scale-110" x-html="cat.icon" style="width: 24px; height: 24px;"></div>
                             <span class="text-sm font-sans font-bold tracking-widest" x-text="cat.name"></span>
                             
-                            <!-- Active Indicator Line -->
                             <div x-show="settings.category === cat.id" class="absolute bottom-0 left-0 w-full h-0.5 bg-space-accent shadow-[0_0_10px_#D4AF37]"></div>
                         </button>
                     </template>
                 </div>
             </section>
 
-            <!-- 4. Advanced Settings -->
             <section class="space-y-3">
                 <h2 class="text-xs text-space-sub uppercase tracking-[0.15em] pl-1 font-display mt-6">ADVANCED SETTINGS</h2>
                 
                 <div class="grid grid-cols-2 gap-3">
-                    <!-- Whiteboard Toggle -->
                     <button @click="settings.whiteboard = !settings.whiteboard" 
                         class="glass-card rounded-xl p-4 border border-white/5 flex flex-col justify-between text-left transition-all h-24 hover:border-white/20"
                         :class="settings.whiteboard ? 'border-space-accent/50 bg-space-accent/5 shadow-glow/10' : ''">
@@ -514,7 +507,6 @@
                         </div>
                     </button>
 
-                    <!-- Spy Recognition Toggle -->
                     <button @click="settings.spyRecognition = !settings.spyRecognition" 
                         class="glass-card rounded-xl p-4 border border-white/5 flex flex-col justify-between text-left transition-all h-24 hover:border-white/20"
                         :class="settings.spyRecognition ? 'border-space-accent/50 bg-space-accent/5 shadow-glow/10' : ''">
@@ -531,7 +523,6 @@
                     </button>
                 </div>
 
-                <!-- Whiteboard Modes -->
                 <div x-show="settings.whiteboard" x-collapse class="glass-panel rounded-xl p-1">
                     <div class="flex gap-1">
                         <button @click="settings.whiteboardMode = 'A'" 
@@ -553,7 +544,6 @@
             </section>
         </div>
 
-        <!-- Start Button -->
         <div class="absolute bottom-0 left-0 w-full p-6 pb-10 bg-gradient-to-t from-space-900 via-space-900/90 to-transparent z-20">
             <button @click="startGame()" class="relative w-full group overflow-hidden rounded-2xl">
                 <div class="absolute inset-0 bg-space-accent transition-transform duration-300 group-hover:scale-105"></div>
@@ -566,12 +556,8 @@
         </div>
     </div>
 
-    <!-- ========================================== -->
-    <!-- PHASE 2: PASS & PLAY -->
-    <!-- ========================================== -->
     <div x-show="phase === 'pass'" x-cloak class="fixed inset-0 z-40 flex flex-col items-center justify-center p-6 text-center select-none backdrop-blur-3xl bg-black/60">
         
-        <!-- Animated Ring -->
         <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div class="w-72 h-72 border border-space-accent/20 rounded-full animate-[spin_10s_linear_infinite]"></div>
             <div class="w-[300px] h-[300px] border border-space-accent/10 rounded-full absolute animate-[spin_15s_linear_infinite_reverse]"></div>
@@ -581,36 +567,28 @@
         <div class="relative z-10 w-full max-w-sm">
             <div class="mb-14 space-y-2">
                 <p class="text-space-accent text-xs font-display tracking-[0.4em] opacity-80">IDENTITY CHECK</p>
-                <h2 class="text-2xl font-light text-white font-sans">
-                    請傳遞給<br>
-                    <span class="text-white font-bold mt-3 block text-5xl drop-shadow-[0_0_15px_rgba(255,255,255,0.3)]" x-text="players[currentTurn]?.name"></span>
+                <h2 class="text-4xl font-bold text-white font-sans mt-4 drop-shadow-[0_0_15px_rgba(255,255,255,0.3)]">
+                    我是 <span class="text-space-accent" x-text="players[currentTurn]?.name"></span>
                 </h2>
             </div>
 
-            <!-- Hold Button -->
             <div 
-                @touchstart.prevent="isHolding = true" 
-                @touchend.prevent="isHolding = false"
-                @mousedown="isHolding = true" 
-                @mouseup="isHolding = false"
-                @mouseleave="isHolding = false"
-                :class="isHolding ? 'scale-100 border-space-accent bg-black/80 shadow-glow-strong' : 'scale-95 border-white/20 bg-white/5 hover:border-space-accent/50'"
-                class="w-64 h-64 mx-auto rounded-full border-2 flex flex-col items-center justify-center transition-all duration-300 relative overflow-hidden cursor-pointer backdrop-blur-md group">
+                @click="toggleReveal()"
+                class="w-64 h-64 mx-auto rounded-full border-2 flex flex-col items-center justify-center transition-all duration-300 relative overflow-hidden cursor-pointer backdrop-blur-md group"
+                :class="isRevealed ? 'scale-100 border-space-accent bg-black/80 shadow-glow-strong' : 'scale-95 border-white/20 bg-white/5 hover:border-space-accent/50'">
                 
-                <!-- Hidden State -->
-                <div x-show="!isHolding" class="flex flex-col items-center transition-all duration-300 group-hover:scale-110">
+                <div x-show="!isRevealed" class="flex flex-col items-center transition-all duration-300 group-hover:scale-110">
                     <div class="p-4 rounded-full bg-space-accent/10 mb-4 animate-pulse">
                         <svg class="w-12 h-12 text-space-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                         </svg>
                     </div>
-                    <p class="text-space-sub font-display tracking-widest text-sm">按住顯示</p>
+                    <p class="text-white font-display tracking-widest text-lg font-bold">點擊查看</p>
                 </div>
 
-                <!-- Revealed State -->
-                <div x-show="isHolding" class="absolute inset-0 flex flex-col items-center justify-center p-6 z-20 bg-black/90">
-                    <p class="text-space-accent text-[10px] uppercase tracking-widest mb-4 border-b border-space-accent/30 pb-1">您的身份</p>
+                <div x-show="isRevealed" class="absolute inset-0 flex flex-col items-center justify-center p-6 z-20 bg-black/90">
+                    <p class="text-space-accent text-[10px] uppercase tracking-widest mb-4 border-b border-space-accent/30 pb-1">您的詞彙</p>
                     
                     <h3 class="text-4xl font-bold text-white mb-6 leading-tight break-words font-sans drop-shadow-md" 
                         :class="players[currentTurn]?.role === 'whiteboard' ? 'text-space-sub italic' : ''"
@@ -621,20 +599,17 @@
                         <p class="text-space-danger text-xs font-bold mb-1">同伴</p>
                         <p class="text-white text-sm" x-text="getTeammates()"></p>
                     </div>
+
+                    <p class="absolute bottom-8 text-space-accent text-sm font-bold animate-pulse">
+                        點擊隱藏並傳遞 ➔
+                    </p>
                 </div>
             </div>
 
-            <button @click="nextTurn()" class="mt-16 w-full py-4 rounded-xl border border-white/10 bg-white/5 text-space-text font-display tracking-widest hover:bg-space-accent hover:text-black hover:border-space-accent transition-all duration-300">
-                <span x-text="currentTurn < players.length - 1 ? '下一位' : '開始遊戲'"></span>
-            </button>
-        </div>
+            </div>
     </div>
 
-    <!-- ========================================== -->
-    <!-- PHASE 3: MAIN GAME BOARD -->
-    <!-- ========================================== -->
     <div x-show="phase === 'play'" x-cloak class="flex flex-col h-full relative z-10">
-        <!-- Game Header -->
         <div class="px-6 py-4 flex justify-between items-center glass-panel z-20 border-b-0 border-white/5 sticky top-0">
             <div>
                 <h2 class="text-space-accent font-display font-bold text-xl tracking-wide">THE GAME</h2>
@@ -650,7 +625,6 @@
             </button>
         </div>
 
-        <!-- Answers Reveal Bar -->
         <div x-show="showAnswers" x-transition.origin.top class="bg-black/80 backdrop-blur-xl px-6 py-4 border-b border-space-danger/30 relative z-10">
             <div class="flex justify-between text-xs font-sans">
                 <div>
@@ -664,7 +638,6 @@
             </div>
         </div>
 
-        <!-- Player Grid -->
         <div class="flex-1 overflow-y-auto custom-scrollbar p-6 pb-24">
             <div class="grid grid-cols-2 gap-4">
                 <template x-for="p in players" :key="p.id">
@@ -674,10 +647,8 @@
                         :class="p.isDead ? 'opacity-40 grayscale border-transparent bg-black/20' : 'border-white/10 bg-space-800/40 hover:bg-space-800/60 hover:border-space-accent/30 shadow-glass'"
                         class="aspect-[4/3] rounded-2xl border relative flex flex-col items-center justify-center p-4 transition-all duration-300 group overflow-hidden backdrop-blur-sm">
                         
-                        <!-- Number Badge -->
                         <div class="absolute top-2 left-3 text-[10px] font-display font-bold text-space-sub opacity-50" x-text="'NO.' + p.id"></div>
 
-                        <!-- Status Icon -->
                         <div class="mb-2 transition-transform duration-500 relative" :class="p.isDead ? 'scale-75' : 'group-hover:scale-110 group-hover:-translate-y-1'">
                             <div class="absolute inset-0 bg-space-accent/20 blur-xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></div>
                             <svg x-show="!p.isDead" class="w-8 h-8 text-space-accent relative z-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -688,12 +659,10 @@
                             </svg>
                         </div>
 
-                        <!-- Name -->
                         <div class="text-sm font-medium text-center truncate w-full px-2 font-sans tracking-wide" 
                             :class="p.isDead ? 'line-through text-space-sub' : 'text-white'"
                             x-text="p.name"></div>
 
-                        <!-- Role Reveal (If Dead) -->
                         <div x-show="p.isDead" class="mt-2 text-[10px] font-bold uppercase tracking-widest border px-2 py-0.5 rounded border-white/10" 
                              :class="{
                                 'text-white bg-white/5': p.role === 'civilian', 
@@ -708,11 +677,6 @@
         </div>
     </div>
 
-    <!-- ========================================== -->
-    <!-- MODALS -->
-    <!-- ========================================== -->
-
-    <!-- Elimination Modal -->
     <div x-show="modal.show" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-6 bg-black/80 backdrop-blur-sm" x-transition.opacity>
         <div class="glass-card rounded-2xl w-full max-w-xs p-6 shadow-2xl transform transition-all border-space-danger/30" @click.away="modal.show = false">
             <h3 class="text-lg text-center text-white/80 mb-2 font-sans">確認淘汰?</h3>
@@ -725,15 +689,12 @@
         </div>
     </div>
 
-    <!-- Identity Reveal Modal (After Elimination) -->
     <div x-show="revealModal.show" x-cloak class="fixed inset-0 z-[60] flex items-center justify-center p-6 bg-black/95 backdrop-blur-xl" x-transition:enter="transition ease-out duration-500" x-transition:enter-start="opacity-0 scale-90" x-transition:enter-end="opacity-100 scale-100">
         <div class="text-center w-full relative">
-            <!-- Background Glow -->
             <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-space-accent/10 rounded-full blur-3xl animate-pulse"></div>
             
             <p class="text-space-sub text-xs mb-6 tracking-[0.3em] uppercase font-display relative z-10">IDENTITY REVEALED</p>
             
-            <!-- Dynamic Role Icon/Text -->
             <div class="mb-10 relative z-10">
                 <div class="w-28 h-28 mx-auto rounded-full flex items-center justify-center mb-6 border-2 shadow-glass"
                     :class="{
@@ -754,9 +715,7 @@
         </div>
     </div>
 
-    <!-- Game Over Screen -->
     <div x-show="phase === 'gameover'" x-cloak class="fixed inset-0 z-[70] bg-[#050505] flex flex-col items-center justify-center p-6 text-center">
-        <!-- Victory Particles (Simplified) -->
         <div class="absolute inset-0 overflow-hidden pointer-events-none">
             <div class="absolute top-1/4 left-1/4 w-32 h-32 bg-space-accent/20 rounded-full blur-[80px]"></div>
             <div class="absolute bottom-1/4 right-1/4 w-40 h-40 bg-purple-500/20 rounded-full blur-[80px]"></div>
@@ -794,7 +753,6 @@
         }
     </style>
 
-    <!-- Starfield Logic -->
     <script>
         const canvas = document.getElementById('starfield');
         const ctx = canvas.getContext('2d');
